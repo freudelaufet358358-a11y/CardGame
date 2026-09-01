@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SHIELD BREAK DUEL ― ブラウザで遊べるカードゲーム</title>
+<meta name="description" content="マナ・シールド・表示形式・伏せカードを組み合わせたオリジナルの対戦型カードゲーム。CPU対戦、2人対戦、デッキ構築が全てブラウザだけで遊べます。">
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+
+<!-- ============================ タイトル ============================ -->
+<section id="screen-title" class="screen is-active">
+  <div class="title-wrap">
+    <h1 class="game-title">
+      <span class="game-title__main">SHIELD BREAK</span>
+      <span class="game-title__sub">DUEL</span>
+    </h1>
+    <p class="game-title__lead">
+      マナを貯め、クリーチャーを並べ、5枚のシールドを割り切れ。<br>
+      割られたシールドから反撃の <b>シールドトリガー</b> が飛び出す、逆転のあるカードゲーム。
+    </p>
+
+    <div class="title-menu">
+      <button class="btn btn--primary btn--big" data-goto="setup-cpu">
+        <span class="btn__icon">🤖</span>
+        <span><b>CPUと対戦</b><small>ひとりで遊ぶ</small></span>
+      </button>
+      <button class="btn btn--big" data-goto="setup-hotseat">
+        <span class="btn__icon">👥</span>
+        <span><b>2人で対戦</b><small>同じ画面で交互に操作</small></span>
+      </button>
+      <button class="btn btn--big" data-goto="deckbuilder">
+        <span class="btn__icon">🛠️</span>
+        <span><b>デッキを作る</b><small>40枚を自由に構築</small></span>
+      </button>
+      <button class="btn btn--big" data-goto="rules">
+        <span class="btn__icon">📖</span>
+        <span><b>遊びかた</b><small>ルールとカード一覧</small></span>
+      </button>
+    </div>
+    <p class="title-note">
+      本作はデュエル・マスターズや遊☆戯☆王のルールを参考にした<b>オリジナル作品</b>です。
+      既存カードの名称・イラスト・テキストは使用していません。
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 対戦準備 ============================ -->
+<section id="screen-setup" class="screen">
+  <header class="bar">
+    <button class="btn btn--ghost" data-goto="title">← タイトル</button>
+    <h2 id="setup-heading">対戦の準備</h2>
+    <span></span>
+  </header>
+
+  <div class="setup">
+    <div class="setup__col">
+      <h3><span id="setup-p1-label">あなた</span>のデッキ</h3>
+      <div id="setup-deck-1" class="deck-choice"></div>
+    </div>
+    <div class="setup__col">
+      <h3><span id="setup-p2-label">相手</span>のデッキ</h3>
+      <div id="setup-deck-2" class="deck-choice"></div>
+    </div>
+  </div>
+
+  <div class="setup__options">
+    <div id="setup-difficulty-row" class="option-row">
+      <span class="option-row__label">CPUの強さ</span>
+      <div class="segmented" id="setup-difficulty"></div>
+    </div>
+    <div class="option-row">
+      <span class="option-row__label">先攻</span>
+      <div class="segmented" id="setup-first"></div>
+    </div>
+  </div>
+
+  <div class="setup__go">
+    <button class="btn btn--primary btn--big" id="btn-start-duel">デュエル開始！</button>
+  </div>
+</section>
+
+<!-- ============================ デュエル ============================ -->
+<section id="screen-duel" class="screen screen--duel">
+  <div class="duel">
+    <!-- 相手側（盤面は自分側と鏡写し。シールドが中央側＝向き合う配置） -->
+    <div class="side side--foe">
+      <div class="side__info" id="foe-info"></div>
+      <div class="zones">
+        <div class="zone-row">
+          <div class="zone zone--mana" id="foe-mana"></div>
+          <div class="zone zone--traps" id="foe-traps"></div>
+        </div>
+        <div class="zone zone--field" id="foe-field"></div>
+        <div class="zone zone--shields" id="foe-shields"></div>
+      </div>
+    </div>
+
+    <!-- 中央 -->
+    <div class="middle">
+      <div class="middle__status" id="duel-status"></div>
+      <button class="btn btn--ghost btn--tiny" id="btn-toggle-log">ログ</button>
+      <button class="btn btn--ghost btn--tiny" id="btn-quit">投了</button>
+    </div>
+
+    <!-- 自分側 -->
+    <div class="side side--me">
+      <div class="zones">
+        <div class="zone zone--shields" id="me-shields"></div>
+        <div class="zone zone--field" id="me-field"></div>
+        <div class="zone-row">
+          <div class="zone zone--mana" id="me-mana"></div>
+          <div class="zone zone--traps" id="me-traps"></div>
+        </div>
+      </div>
+      <div class="side__info" id="me-info"></div>
+      <div class="hand" id="me-hand"></div>
+      <div class="actionbar" id="actionbar"></div>
+    </div>
+  </div>
+
+  <aside class="logpanel" id="logpanel" hidden>
+    <div class="logpanel__head">
+      <b>ゲームログ</b>
+      <button class="btn btn--ghost btn--tiny" id="btn-close-log">閉じる</button>
+    </div>
+    <ol class="logpanel__list" id="loglist"></ol>
+  </aside>
+
+  <!-- カード詳細のポップオーバー -->
+  <div class="cardpeek" id="cardpeek" hidden></div>
+
+  <!-- 手番の受け渡し（2人対戦用） -->
+  <div class="overlay" id="handoff" hidden>
+    <div class="overlay__box">
+      <p class="overlay__eyebrow">画面を次の人に渡してください</p>
+      <h2 id="handoff-name"></h2>
+      <button class="btn btn--primary btn--big" id="btn-handoff">このターンを始める</button>
+    </div>
+  </div>
+
+  <!-- 決着 -->
+  <div class="overlay" id="result" hidden>
+    <div class="overlay__box">
+      <h2 id="result-title"></h2>
+      <p id="result-detail"></p>
+      <div class="overlay__actions">
+        <button class="btn btn--primary" id="btn-rematch">もう一度</button>
+        <button class="btn" data-goto="title">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================== デッキビルダー ========================== -->
+<section id="screen-deckbuilder" class="screen">
+  <header class="bar">
+    <button class="btn btn--ghost" data-goto="title">← タイトル</button>
+    <h2>デッキビルダー</h2>
+    <span class="bar__note" id="db-count">0 / 40</span>
+  </header>
+
+  <div class="builder">
+    <div class="builder__pool">
+      <div class="filters">
+        <div class="segmented segmented--wrap" id="db-filter-civ"></div>
+        <div class="segmented segmented--wrap" id="db-filter-type"></div>
+      </div>
+      <div class="cardgrid" id="db-pool"></div>
+    </div>
+
+    <aside class="builder__deck">
+      <label class="field">
+        <span>デッキ名</span>
+        <input type="text" id="db-name" maxlength="24" placeholder="マイデッキ">
+      </label>
+
+      <div class="deckstats" id="db-stats"></div>
+      <ul class="decklist" id="db-list"></ul>
+
+      <div class="builder__actions">
+        <button class="btn btn--primary" id="db-save">保存する</button>
+        <button class="btn" id="db-clear">空にする</button>
+      </div>
+      <div class="builder__load">
+        <label class="field">
+          <span>読み込む</span>
+          <select id="db-load"></select>
+        </label>
+        <button class="btn btn--ghost btn--tiny" id="db-delete">この保存デッキを削除</button>
+      </div>
+      <p class="hint" id="db-message"></p>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================ 遊びかた ============================ -->
+<section id="screen-rules" class="screen">
+  <header class="bar">
+    <button class="btn btn--ghost" data-goto="title">← タイトル</button>
+    <h2>遊びかた</h2>
+    <span></span>
+  </header>
+  <div class="doc" id="rules-body"></div>
+</section>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+# ビルド不要の静的サイトなので、リポジトリの中身をそのまま公開する。
+on:
+  push:
+    branches:
+      - claude/card-game-project-s4ofnb
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は同時に1つだけ。実行中のデプロイは中断しない。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: ルールの自動テスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: CPU同士の自動対戦でルールを検証
+        run: node tools/selftest.mjs 400
+
+  deploy:
+    name: Pages へデプロイ
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # enablement: true を付けると、リポジトリの Pages 設定が未設定でも
+      # ワークフローから有効化を試みる（手動設定なしで公開できる）。
+      - name: Pages の設定
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: サイトをアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: デプロイ
+        id: deployment
+        uses: actions/deploy-pages@v4
