@@ -40,18 +40,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # enablement: true を付けると、リポジトリの Pages 設定が未設定でも
-      # ワークフローから有効化を試みる（手動設定なしで公開できる）。
+      # Pages の「作成」は GITHUB_TOKEN の権限では行えない（Resource not accessible）。
+      # そのため自動有効化はせず、現在の設定を読み取って動きを分ける。
+      #   build_type=workflow → このワークフローで公開する
+      #   それ以外            → Settings 側で公開されているのでここは何もしない
+      - name: Pages の公開方法を確認
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if build_type=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null); then
+            echo "設定されている公開方法: $build_type"
+            echo "build_type=$build_type" >> "$GITHUB_OUTPUT"
+          else
+            echo "GitHub Pages はまだ有効化されていません。"
+            echo "build_type=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 未設定・ブランチ公開のときの案内
+        if: steps.check.outputs.build_type != 'workflow'
+        run: |
+          {
+            echo "### GitHub Pages の設定について"
+            echo ""
+            echo "このリポジトリの Pages は **GitHub Actions 公開** に設定されていないため、"
+            echo "このジョブでは何もしませんでした（テストは実行済みです）。"
+            echo ""
+            echo "公開するには、リポジトリの **Settings → Pages** で次のどちらかを選んでください。"
+            echo ""
+            echo "1. **Source: GitHub Actions** … このワークフローが以後のpushで自動デプロイします"
+            echo "2. **Source: Deploy from a branch** → ブランチ \`${{ github.ref_name }}\` / フォルダ \`/ (root)\`"
+            echo "   … Actions を使わず、リポジトリ直下をそのまま配信します（静的サイトなのでこれで動きます）"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=GitHub Pages が未設定::Settings → Pages で公開方法を選んでください（詳細はジョブのサマリを参照）"
+
       - name: Pages の設定
+        if: steps.check.outputs.build_type == 'workflow'
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: サイトをアップロード
+        if: steps.check.outputs.build_type == 'workflow'
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
       - name: デプロイ
         id: deployment
+        if: steps.check.outputs.build_type == 'workflow'
         uses: actions/deploy-pages@v4

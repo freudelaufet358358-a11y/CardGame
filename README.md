@@ -155,15 +155,27 @@ UIコードを二重に書く必要がありません。CPUも「全合法手を
 
 ## 公開について（GitHub Pages）
 
-静的ファイルがリポジトリ直下にあるため、次のどちらの方法でも公開できます。
+**公開には、リポジトリ側で1回だけ設定が必要です。**
+GitHub Pages の有効化は Actions の `GITHUB_TOKEN` の権限では行えないため（`Resource not accessible by integration`）、
+最初の1回だけ手動で公開方法を選んでください。
 
-1. **GitHub Actions（自動）** — `.github/workflows/pages.yml` が push のたびにデプロイします。
-   `actions/configure-pages` の `enablement: true` により、Pages 設定も自動で有効化を試みます。
-2. **ブランチから直接公開（手動・1操作）** — リポジトリの
-   **Settings → Pages → Build and deployment → Source: Deploy from a branch** を選び、
-   ブランチに `claude/card-game-project-s4ofnb`、フォルダに `/ (root)` を指定して Save。
+リポジトリの **Settings → Pages → Build and deployment → Source** で、どちらかを選びます。
 
-ビルド成果物ではなくソースそのものを配信するため、どちらの方法でも同じものが公開されます。
+| 選択肢 | 設定 | 動き |
+|---|---|---|
+| **A. ブランチから直接公開（手軽）** | `Deploy from a branch` → ブランチ `claude/card-game-project-s4ofnb` / フォルダ `/ (root)` | Actions を使わず、リポジトリ直下をそのまま配信。ビルドが無いのでこれで動きます |
+| **B. Actions で公開** | `GitHub Actions` | `.github/workflows/pages.yml` が push のたびに自動デプロイします |
+
+設定後、数十秒〜数分で次のURLで遊べるようになります。
+
+```
+https://freudelaufet358358-a11y.github.io/CardGame/
+```
+
+同梱のワークフローは、どちらを選んでも壊れないようになっています。
+`test` ジョブ（ルールの自動テスト）は常に実行され、`deploy` ジョブは Pages が
+**GitHub Actions 公開**に設定されているときだけデプロイし、そうでなければ
+何もせずに設定手順をジョブのサマリに表示します。
 
 ## ライセンス
 
