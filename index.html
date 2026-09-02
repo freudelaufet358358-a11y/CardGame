@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-skin="felt">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SHIELD BREAK DUEL ― ブラウザで遊べるカードゲーム</title>
 <meta name="description" content="マナ・シールド・表示形式・伏せカードを組み合わせたオリジナルの対戦型カードゲーム。CPU対戦、2人対戦、デッキ構築が全てブラウザだけで遊べます。">
-<meta name="theme-color" content="#0d1220">
+<meta name="theme-color" content="#34393a">
 <!-- SNS などにURLを貼ったときの表示 -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="SHIELD BREAK DUEL">
@@ -20,35 +20,43 @@
 
 <!-- ============================ タイトル ============================ -->
 <section id="screen-title" class="screen is-active">
-  <div class="title-wrap">
-    <h1 class="game-title">
-      <span class="game-title__main">SHIELD BREAK</span>
-      <span class="game-title__sub">DUEL</span>
-    </h1>
-    <p class="game-title__lead">
-      マナを貯め、クリーチャーを並べ、5枚のシールドを割り切れ。<br>
-      割られたシールドから反撃の <b>シールドトリガー</b> が飛び出す、逆転のあるカードゲーム。
-    </p>
+  <div class="title">
+    <div class="title__card">
+      <p class="title__eyebrow">ブラウザで遊べる対戦カードゲーム</p>
+      <h1 class="title__name">
+        <span class="title__name-main">SHIELD BREAK</span>
+        <span class="title__name-sub">DUEL</span>
+      </h1>
+      <p class="title__lead">
+        マナを貯め、クリーチャーを並べ、5枚のシールドを割り切る。
+        割られたシールドからは反撃の<b>シールドトリガー</b>が飛び出す。
+      </p>
 
-    <div class="title-menu">
-      <button class="btn btn--primary btn--big" data-goto="setup-cpu">
-        <span class="btn__icon">🤖</span>
-        <span><b>CPUと対戦</b><small>ひとりで遊ぶ</small></span>
-      </button>
-      <button class="btn btn--big" data-goto="setup-hotseat">
-        <span class="btn__icon">👥</span>
-        <span><b>2人で対戦</b><small>同じ画面で交互に操作</small></span>
-      </button>
-      <button class="btn btn--big" data-goto="deckbuilder">
-        <span class="btn__icon">🛠️</span>
-        <span><b>デッキを作る</b><small>40枚を自由に構築</small></span>
-      </button>
-      <button class="btn btn--big" data-goto="rules">
-        <span class="btn__icon">📖</span>
-        <span><b>遊びかた</b><small>ルールとカード一覧</small></span>
-      </button>
+      <nav class="menu" aria-label="メインメニュー">
+        <button class="menu__item" data-goto="setup-cpu">
+          <span class="menu__label">CPUと対戦</span>
+          <span class="menu__desc">ひとりで遊ぶ。やさしい／ふつう</span>
+        </button>
+        <button class="menu__item" data-goto="setup-hotseat">
+          <span class="menu__label">2人で対戦</span>
+          <span class="menu__desc">同じ画面で交互に操作。手札は自動で隠れる</span>
+        </button>
+        <button class="menu__item" data-goto="deckbuilder">
+          <span class="menu__label">デッキを作る</span>
+          <span class="menu__desc">全40種から40枚を構築し、ブラウザに保存</span>
+        </button>
+        <button class="menu__item" data-goto="rules">
+          <span class="menu__label">遊びかた</span>
+          <span class="menu__desc">ルールとカード一覧</span>
+        </button>
+      </nav>
+
+      <div class="title__skin">
+        <span class="title__skin-label">見た目</span>
+        <div class="segmented" id="skin-picker" role="radiogroup" aria-label="見た目"></div>
+      </div>
     </div>
-    <p class="title-note">
+    <p class="title__note">
       本作はデュエル・マスターズや遊☆戯☆王のルールを参考にした<b>オリジナル作品</b>です。
       既存カードの名称・イラスト・テキストは使用していません。
     </p>
@@ -65,77 +73,76 @@
 
   <div class="setup">
     <div class="setup__col">
-      <h3><span id="setup-p1-label">あなた</span>のデッキ</h3>
-      <div id="setup-deck-1" class="deck-choice"></div>
+      <h3 class="setup__h"><span id="setup-p1-label">あなた</span>のデッキ</h3>
+      <div id="setup-deck-1" class="deck-choice" role="radiogroup"></div>
     </div>
     <div class="setup__col">
-      <h3><span id="setup-p2-label">相手</span>のデッキ</h3>
-      <div id="setup-deck-2" class="deck-choice"></div>
+      <h3 class="setup__h"><span id="setup-p2-label">相手</span>のデッキ</h3>
+      <div id="setup-deck-2" class="deck-choice" role="radiogroup"></div>
     </div>
-  </div>
 
-  <div class="setup__options">
-    <div id="setup-difficulty-row" class="option-row">
-      <span class="option-row__label">CPUの強さ</span>
-      <div class="segmented" id="setup-difficulty"></div>
+    <div class="setup__options">
+      <div id="setup-difficulty-row" class="option-row">
+        <span class="option-row__label">CPUの強さ</span>
+        <div class="segmented" id="setup-difficulty" role="radiogroup" aria-label="CPUの強さ"></div>
+      </div>
+      <div class="option-row">
+        <span class="option-row__label">先攻</span>
+        <div class="segmented" id="setup-first" role="radiogroup" aria-label="先攻"></div>
+      </div>
+      <button class="btn btn--primary btn--big" id="btn-start-duel">デュエル開始</button>
     </div>
-    <div class="option-row">
-      <span class="option-row__label">先攻</span>
-      <div class="segmented" id="setup-first"></div>
-    </div>
-  </div>
-
-  <div class="setup__go">
-    <button class="btn btn--primary btn--big" id="btn-start-duel">デュエル開始！</button>
   </div>
 </section>
 
 <!-- ============================ デュエル ============================ -->
 <section id="screen-duel" class="screen screen--duel">
   <div class="duel">
-    <!-- 相手側（盤面は自分側と鏡写し。シールドが中央側＝向き合う配置） -->
-    <div class="side side--foe">
-      <div class="side__info" id="foe-info"></div>
-      <div class="zones">
-        <div class="zone-row">
-          <div class="zone zone--mana" id="foe-mana"></div>
-          <div class="zone zone--traps" id="foe-traps"></div>
-        </div>
-        <div class="zone zone--field" id="foe-field"></div>
-        <div class="zone zone--shields" id="foe-shields"></div>
+    <div class="board">
+      <!-- 相手の帳票：名前・シールド・手札・マナ・山札・墓地・伏せ を1行に -->
+      <div class="ledger ledger--foe" id="foe-info">
+        <span class="ledger__name" id="foe-name"></span>
+        <span class="ledger__item"><span class="ledger__k">盾</span><span class="zone zone--shields" id="foe-shields"></span></span>
+        <span class="ledger__item"><span class="ledger__k">手札</span><b class="ledger__v" id="foe-hand-count">0</b></span>
+        <span class="ledger__item ledger__item--mana"><span class="ledger__k">マナ</span><span class="zone zone--mana" id="foe-mana"></span><b class="ledger__v" id="foe-mana-count">0/0</b></span>
+        <span class="ledger__item"><span class="ledger__k">山札</span><b class="ledger__v" id="foe-deck-count">0</b></span>
+        <span class="ledger__item"><span class="ledger__k">墓地</span><b class="ledger__v" id="foe-grave-count">0</b></span>
+        <span class="ledger__item"><span class="ledger__k">伏せ</span><span class="zone zone--traps" id="foe-traps"></span></span>
       </div>
+
+      <div class="zone zone--field" id="foe-field" role="group" aria-label="相手のバトルゾーン"></div>
+
+      <div class="center" id="duel-status" role="status" aria-live="polite"></div>
+
+      <div class="zone zone--field" id="me-field" role="group" aria-label="自分のバトルゾーン"></div>
+
+      <div class="ledger ledger--me" id="me-info">
+        <span class="ledger__name" id="me-name"></span>
+        <span class="ledger__item"><span class="ledger__k">盾</span><span class="zone zone--shields" id="me-shields"></span></span>
+        <span class="ledger__item"><span class="ledger__k">手札</span><b class="ledger__v" id="me-hand-count">0</b></span>
+        <span class="ledger__item ledger__item--mana"><span class="ledger__k">マナ</span><span class="zone zone--mana" id="me-mana"></span><b class="ledger__v" id="me-mana-count">0/0</b></span>
+        <span class="ledger__item"><span class="ledger__k">山札</span><b class="ledger__v" id="me-deck-count">0</b></span>
+        <span class="ledger__item"><span class="ledger__k">墓地</span><b class="ledger__v" id="me-grave-count">0</b></span>
+        <span class="ledger__item"><span class="ledger__k">伏せ</span><span class="zone zone--traps" id="me-traps"></span></span>
+      </div>
+
+      <div class="hand" id="me-hand" role="group" aria-label="手札"></div>
     </div>
 
-    <!-- 中央 -->
-    <div class="middle">
-      <div class="middle__status" id="duel-status"></div>
-      <button class="btn btn--ghost btn--tiny" id="btn-toggle-log">ログ</button>
-      <button class="btn btn--ghost btn--tiny" id="btn-quit">投了</button>
-    </div>
-
-    <!-- 自分側 -->
-    <div class="side side--me">
-      <div class="zones">
-        <div class="zone zone--shields" id="me-shields"></div>
-        <div class="zone zone--field" id="me-field"></div>
-        <div class="zone-row">
-          <div class="zone zone--mana" id="me-mana"></div>
-          <div class="zone zone--traps" id="me-traps"></div>
-        </div>
+    <!-- 右のレール：行動とログ。狭い画面では下部のシートになる -->
+    <aside class="rail" id="rail">
+      <div class="rail__head">
+        <span class="rail__title">行動</span>
+        <button class="btn btn--ghost btn--tiny" id="btn-toggle-log" aria-expanded="false">ログ</button>
+        <button class="btn btn--ghost btn--tiny btn--danger" id="btn-quit">投了</button>
       </div>
-      <div class="side__info" id="me-info"></div>
-      <div class="hand" id="me-hand"></div>
       <div class="actionbar" id="actionbar"></div>
-    </div>
+      <div class="rail__log" id="logpanel">
+        <div class="rail__logtitle">ログ<button class="btn btn--ghost btn--tiny" id="btn-close-log">閉じる</button></div>
+        <ol class="log" id="loglist"></ol>
+      </div>
+    </aside>
   </div>
-
-  <aside class="logpanel" id="logpanel" hidden>
-    <div class="logpanel__head">
-      <b>ゲームログ</b>
-      <button class="btn btn--ghost btn--tiny" id="btn-close-log">閉じる</button>
-    </div>
-    <ol class="logpanel__list" id="loglist"></ol>
-  </aside>
 
   <!-- カード詳細のポップオーバー -->
   <div class="cardpeek" id="cardpeek" hidden></div>
@@ -152,6 +159,7 @@
   <!-- 決着 -->
   <div class="overlay" id="result" hidden>
     <div class="overlay__box">
+      <p class="overlay__eyebrow">決着</p>
       <h2 id="result-title"></h2>
       <p id="result-detail"></p>
       <div class="overlay__actions">
@@ -173,8 +181,9 @@
   <div class="builder">
     <div class="builder__pool">
       <div class="filters">
-        <div class="segmented segmented--wrap" id="db-filter-civ"></div>
-        <div class="segmented segmented--wrap" id="db-filter-type"></div>
+        <div class="segmented segmented--wrap" id="db-filter-civ" role="radiogroup" aria-label="文明で絞り込む"></div>
+        <div class="segmented segmented--wrap" id="db-filter-type" role="radiogroup" aria-label="種類で絞り込む"></div>
+        <p class="filters__hint">クリックで1枚追加、右クリックで1枚減らす。</p>
       </div>
       <div class="cardgrid" id="db-pool"></div>
     </div>

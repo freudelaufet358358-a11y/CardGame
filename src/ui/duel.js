@@ -4,9 +4,15 @@
  * ルールには一切触れず、engine/rules.js の legalActions()/applyAction() だけを使う。
  * そのため「CPU対戦」と「2人対戦」の差は、手番のプレイヤーが cpu かどうかで
  * 自動で指し手を進めるかどうか、という1点だけになっている。
+ *
+ * 画面は「盤面（5段 + 手札）」と「レール（行動 + ログ）」の2つ。
+ * 対象の選択は、メイン・防御・トリガーのどのフェイズでも
+ *   1. 盤面上のカードを破線で光らせて押せるようにする
+ *   2. 同じ選択肢をレールにボタンとして並べる（数字キーで選べる）
+ * の両方を用意する。
  */
 
-import { CIVS, getCard } from '../data/cards.js';
+import { getCard } from '../data/cards.js';
 import { cardOf, createGame, findInstance, isSummoningSick, opponentOf } from '../engine/state.js';
 import { applyAction, legalActions } from '../engine/rules.js';
 import { chooseAction } from '../ai/cpu.js';
@@ -17,6 +23,10 @@ const CPU_DELAY_FAST = 260;
 
 const dom = {};
 let game = null;
+/** 直近の操作がキーボードか。マウス操作のときはフォーカスを戻さない（枠が邪魔になる） */
+let keyboardUser = false;
+document.addEventListener('keydown', () => { keyboardUser = true; }, true);
+document.addEventListener('pointerdown', () => { keyboardUser = false; }, true);
 
 function $(id) {
   if (!dom[id]) dom[id] = document.getElementById(id);
@@ -47,11 +57,10 @@ export function startDuel(config) {
     busy: false,
     lastActive: null,
     timer: null,
-    logOpen: false,
   };
   $('result').hidden = true;
   $('handoff').hidden = true;
-  $('logpanel').hidden = true;
+  setLogOpen(false);
   bindOnce();
   // 先攻がCPUなら、そのまま思考を始める
   game.lastActive = game.state.active;
@@ -70,10 +79,9 @@ function bindOnce() {
   bound = true;
 
   $('btn-toggle-log').addEventListener('click', () => {
-    $('logpanel').hidden = !$('logpanel').hidden;
-    if (!$('logpanel').hidden) renderLog();
+    setLogOpen(!$('rail').classList.contains('is-logopen'));
   });
-  $('btn-close-log').addEventListener('click', () => { $('logpanel').hidden = true; });
+  $('btn-close-log').addEventListener('click', () => setLogOpen(false));
 
   $('btn-quit').addEventListener('click', () => {
     if (!game) return;
@@ -92,6 +100,15 @@ function bindOnce() {
     stopDuel();
     startDuel(config);
   });
+
+  document.addEventListener('keydown', onKeyDown);
+}
+
+/** 狭い画面ではログを折りたたむ。広い画面では CSS が常時表示にする */
+function setLogOpen(open) {
+  $('rail').classList.toggle('is-logopen', open);
+  $('btn-toggle-log').setAttribute('aria-expanded', String(open));
+  if (open) renderLog();
 }
 
 function leaveDuel() {
@@ -136,6 +153,11 @@ function render() {
   const me = viewpoint();
   const foe = opponentOf(me);
 
+  // 描画で DOM を作り直すので、キーボード操作中はフォーカスしていたカードを覚えておいて戻す
+  const focused = keyboardUser
+    ? document.activeElement?.closest?.('#screen-duel [data-uid]')?.dataset.uid
+    : null;
+
   renderInfo($('me-info'), me, state.active === me);
   renderInfo($('foe-info'), foe, state.active === foe);
 
@@ -152,40 +174,38 @@ function render() {
   renderStatus();
   renderActionBar();
   applyTargetHighlights();
-  if (!$('logpanel').hidden) renderLog();
+  renderLog();
+
+  if (focused) {
+    const again = document.querySelector(`#screen-duel [data-uid="${focused}"]`);
+    if (again) again.focus({ preventScroll: true });
+  }
 }
 
 function renderInfo(node, index, isTurn) {
   const player = game.state.players[index];
-  node.className = `side__info${isTurn ? ' is-turn' : ''}`;
-  node.replaceChildren();
-  node.append(el('span', 'side__name', player.name));
+  const side = node.id === 'me-info' ? 'me' : 'foe';
+  node.className = `ledger ledger--${side}${isTurn ? ' is-turn' : ''}`;
+  node.setAttribute('aria-label', `${player.name}の状況`);
+  $(`${side}-name`).textContent = player.name;
+  $(`${side}-hand-count`).textContent = String(player.hand.length);
   const untapped = player.mana.filter((m) => !m.tapped).length;
-  const pills = [
-    ['🛡 シールド', player.shields.length],
-    ['🃏 手札', player.hand.length],
-    ['💠 マナ', `${untapped}/${player.mana.length}`],
-    ['📚 山札', player.deck.length],
-    ['⚰️ 墓地', player.grave.length],
-  ];
-  for (const [label, value] of pills) {
-    const pill = el('span', 'pill');
-    pill.append(document.createTextNode(`${label} `), el('b', null, String(value)));
-    node.append(pill);
-  }
+  $(`${side}-mana-count`).textContent = `${untapped}/${player.mana.length}`;
+  $(`${side}-deck-count`).textContent = String(player.deck.length);
+  $(`${side}-grave-count`).textContent = String(player.grave.length);
 }
 
 function renderShields(node, index) {
   const player = game.state.players[index];
   node.replaceChildren();
-  node.dataset.zone = 'shields';
   node.dataset.player = String(index);
+  node.setAttribute('aria-label', `シールド ${player.shields.length}枚`);
   if (player.shields.length === 0) {
-    node.append(el('span', 'zone__empty', 'シールドなし ― 次の攻撃が通れば敗北'));
+    node.append(el('span', 'zone__empty', '0 ― 次の攻撃で敗北'));
     return;
   }
   for (const inst of player.shields) {
-    const back = backEl('shield', '🛡');
+    const back = backEl('shield');
     back.dataset.uid = inst.uid;
     node.append(back);
   }
@@ -203,12 +223,23 @@ function renderField(node, index) {
     const card = cardOf(inst);
     const node2 = cardEl(card, { inst });
     node2.dataset.uid = inst.uid;
-    if (inst.tapped) node2.classList.add('is-tapped');
-    if (inst.position === 'defense') node2.classList.add('is-defense');
-    if (index === state.active && isSummoningSick(state, inst)) node2.classList.add('is-sick');
+    const notes = [];
+    const defense = inst.position === 'defense';
+    node2.append(el('span', 'card__pos', defense ? '守備表示' : '攻撃表示'));
+    notes.push(defense ? '守備表示' : '攻撃表示');
+    if (inst.tapped) { node2.classList.add('is-tapped'); notes.push('タップ済み'); }
+    if (defense) node2.classList.add('is-defense');
+    if (!inst.tapped && index === state.active && isSummoningSick(state, inst)) {
+      node2.classList.add('is-sick');
+      node2.append(el('span', 'card__state', '召喚酔い'));
+      notes.push('召喚酔い');
+    }
     if (state.pending?.attackerUid === inst.uid) node2.classList.add('fx-flash');
-    if (game.selection?.uid === inst.uid) node2.classList.add('is-selected');
-    node2.append(el('div', 'card__kind', inst.position === 'defense' ? '守備表示' : '攻撃表示'));
+    if (game.selection?.uid === inst.uid) {
+      node2.classList.add('is-selected');
+      node2.setAttribute('aria-pressed', 'true');
+    }
+    node2.setAttribute('aria-label', `${node2.getAttribute('aria-label')}、${notes.join('、')}`);
     node.append(node2);
   }
 }
@@ -217,13 +248,13 @@ function renderMana(node, index) {
   const player = game.state.players[index];
   node.replaceChildren();
   if (player.mana.length === 0) {
-    node.append(el('span', 'zone__empty', 'マナゾーンは空'));
+    node.append(el('span', 'zone__empty', '―'));
     return;
   }
   for (const inst of player.mana) {
     const card = cardOf(inst);
-    const chip = el('div', `manachip manachip--${card.civ}${inst.tapped ? ' is-tapped' : ''}`);
-    chip.append(el('span', 'manachip__civ', CIVS[card.civ].emoji));
+    const chip = el('span', `manachip manachip--${card.civ}${inst.tapped ? ' is-tapped' : ''}`);
+    chip.title = `${card.name}${inst.tapped ? '（使用済み）' : ''}`;
     attachPeek(chip, card);
     node.append(chip);
   }
@@ -233,7 +264,7 @@ function renderTraps(node, index, own) {
   const player = game.state.players[index];
   node.replaceChildren();
   if (player.traps.length === 0) {
-    node.append(el('span', 'zone__empty', '伏せカードなし'));
+    node.append(el('span', 'zone__empty', '―'));
     return;
   }
   for (const inst of player.traps) {
@@ -242,10 +273,10 @@ function renderTraps(node, index, own) {
       const card = cardOf(inst);
       const mini = cardEl(card, { mini: true });
       mini.dataset.uid = inst.uid;
-      mini.style.opacity = '.85';
+      mini.setAttribute('aria-label', `伏せカード：${card.name}`);
       node.append(mini);
     } else {
-      node.append(backEl('trap', '⁉️'));
+      node.append(backEl('trap'));
     }
   }
 }
@@ -258,7 +289,12 @@ function renderHand(node, index) {
   // 2人対戦では、割り込み中に手番でない人の手札を見せない
   const hide = config.mode === 'hotseat' && isInterrupt() && state.priority !== index;
   if (player.controller === 'cpu' || hide) {
-    for (let i = 0; i < player.hand.length; i++) node.append(backEl('hand', '🂠'));
+    for (let i = 0; i < player.hand.length; i++) node.append(backEl('hand'));
+    if (player.hand.length === 0) node.append(el('span', 'zone__empty', '手札なし'));
+    return;
+  }
+  if (player.hand.length === 0) {
+    node.append(el('span', 'zone__empty', '手札なし'));
     return;
   }
 
@@ -267,8 +303,14 @@ function renderHand(node, index) {
     const card = cardOf(inst);
     const node2 = cardEl(card, { inst });
     node2.dataset.uid = inst.uid;
-    if (actionsByUid.has(inst.uid)) node2.classList.add('is-actionable');
-    if (game.selection?.uid === inst.uid) node2.classList.add('is-selected');
+    if (actionsByUid.has(inst.uid)) {
+      node2.classList.add('is-actionable');
+      node2.setAttribute('aria-label', `${node2.getAttribute('aria-label')}、いま使える`);
+    }
+    if (game.selection?.uid === inst.uid) {
+      node2.classList.add('is-selected');
+      node2.setAttribute('aria-pressed', 'true');
+    }
     node.append(node2);
   }
 }
@@ -290,30 +332,88 @@ function renderStatus() {
   const node = $('duel-status');
   node.replaceChildren();
 
+  const turn = el('span', 'center__turn');
+  turn.append(document.createTextNode('ターン '), el('b', null, String(state.turn)));
+  node.append(turn);
+
   if (state.phase === 'gameover') {
-    node.append(el('span', null, '決着'));
+    node.append(el('span', 'center__who', '決着'));
     return;
   }
-  const actor = state.players[state.priority];
-  let text = `ターン${state.turn} ／ ${state.players[state.active].name} の番`;
-  if (state.phase === 'defend') text += ` ― ${actor.name} は防御を選択中`;
-  else if (state.phase === 'trigger') text += ` ― ${actor.name} のシールドトリガー`;
-  else if (!state.players[state.active].chargedThisTurn) text += ' ― マナチャージがまだ可能';
-  node.append(el('b', null, text));
+
+  const active = state.players[state.active];
+  node.append(el('span', 'center__who', `${active.name} の番`));
+
+  const phase = { main: 'メイン', defend: '防御', trigger: 'トリガー' }[state.phase] || state.phase;
+  node.append(el('span', 'center__chip is-on', phase));
+
+  if (state.phase === 'main') {
+    const charged = active.chargedThisTurn;
+    const chip = el('span', `center__chip${charged ? '' : ' is-alert'}`, charged ? 'マナチャージ 済' : 'マナチャージ 未');
+    node.append(chip);
+  } else {
+    const actor = state.players[state.priority];
+    node.append(el('span', 'center__note',
+      state.phase === 'defend' ? `${actor.name} が応じ方を選択中` : `${actor.name} のシールドトリガー`));
+  }
 }
 
 /* ================================================================== *
- * 行動バー
+ * 行動パネル
  * ================================================================== */
+
+/** 数字キーで押せるボタン。順番に 1, 2, 3… を割り当てる */
+function hotkeyButton(bar, label, onClick, opts = {}) {
+  const btn = el('button', `btn${opts.primary ? ' btn--primary' : ''}${opts.ghost ? ' btn--ghost' : ''}`);
+  btn.type = 'button';
+  btn.append(document.createTextNode(label));
+  const key = opts.key ?? nextHotkey(bar);
+  if (key) {
+    btn.dataset.hotkey = key;
+    btn.append(el('kbd', null, key));
+  }
+  btn.addEventListener('click', onClick);
+  bar.append(btn);
+  return btn;
+}
+
+function nextHotkey(bar) {
+  const used = bar.querySelectorAll('[data-hotkey]').length;
+  return used < 9 ? String(used + 1) : null;
+}
+
+/** ミニカード付きのボタン。同名カードが並んでも、絵柄と数値で区別できる */
+function cardButton(bar, card, text, sub, onClick, opts = {}) {
+  const btn = el('button', `btn btn--withcard${opts.primary ? ' btn--primary' : ''}`);
+  btn.type = 'button';
+  const mini = cardEl(card, { mini: true });
+  mini.tabIndex = -1;
+  mini.setAttribute('aria-hidden', 'true');
+  const label = el('span', 'btn__text');
+  label.append(document.createTextNode(text));
+  if (sub) label.append(el('small', null, sub));
+  btn.append(mini, label);
+  const key = opts.key ?? nextHotkey(bar);
+  if (key) {
+    btn.dataset.hotkey = key;
+    btn.append(el('kbd', null, key));
+  }
+  btn.addEventListener('click', onClick);
+  bar.append(btn);
+  return btn;
+}
 
 function renderActionBar() {
   const bar = $('actionbar');
   bar.replaceChildren();
   const { state } = game;
-  if (state.phase === 'gameover') return;
+  if (state.phase === 'gameover') {
+    bar.append(el('span', 'actionbar__prompt is-wait', '決着しました'));
+    return;
+  }
 
   if (!isHumanTurn()) {
-    bar.append(el('span', 'actionbar__prompt', `${state.players[state.priority].name} が考えています…`));
+    bar.append(el('span', 'actionbar__prompt is-wait', `${state.players[state.priority].name} が考えています…`));
     return;
   }
 
@@ -322,42 +422,60 @@ function renderActionBar() {
   return renderMainBar(bar);
 }
 
+/** 対象選択中の共通部分：案内文、盤面外の対象、盤面上の対象のボタン列、やめる */
+function renderTargetingBar(bar) {
+  const { state, targeting } = game;
+  bar.append(el('span', 'actionbar__prompt', targeting.prompt));
+
+  const group = el('div', 'actionbar__group');
+  if (targeting.playerZone) {
+    const defender = state.players[opponentOf(state.active)];
+    hotkeyButton(group, `${defender.name} のシールドを攻撃`, () => submit(targeting.playerZone));
+  }
+  for (const [uid, action] of targeting.onBoard) {
+    const found = findInstance(state, uid);
+    if (!found) continue;
+    const card = cardOf(found.inst);
+    const inst = found.inst;
+    const sub = card.type === 'creature'
+      ? `${inst.position === 'defense' ? '守備表示' : '攻撃表示'}${inst.tapped ? '・タップ済み' : ''} ／ 攻${card.power + (inst.powerBuff || 0)} 守${card.guard + (inst.powerBuff || 0)}`
+      : null;
+    cardButton(group, card, card.name, sub, () => submit(action));
+  }
+  // 盤面に見えない対象（墓地など）はここにカードとして並べる
+  for (const entry of targeting.offBoard) {
+    cardButton(group, entry.card, entry.card.name, entry.note || null, () => submit(entry.action));
+  }
+  bar.append(group);
+
+  hotkeyButton(bar, 'やめる', () => { game.targeting = null; render(); }, { ghost: true, key: 'Esc' });
+}
+
 function renderMainBar(bar) {
   const { state, selection, targeting } = game;
 
-  if (targeting) {
-    bar.append(el('span', 'actionbar__prompt', targeting.prompt));
-    // 盤面に見えない対象（墓地など）はここにカードとして並べる
-    for (const entry of targeting.offBoard) {
-      const btn = cardEl(entry.card, { mini: true });
-      btn.classList.add('is-target');
-      btn.addEventListener('click', () => submit(entry.action));
-      bar.append(btn);
-    }
-    const cancel = el('button', 'btn btn--tiny', 'やめる');
-    cancel.addEventListener('click', () => { game.targeting = null; render(); });
-    bar.append(cancel);
-    return;
-  }
+  if (targeting) return renderTargetingBar(bar);
 
   if (selection) {
+    const found = findInstance(state, selection.uid);
+    const card = found ? cardOf(found.inst) : null;
+    bar.append(el('span', 'actionbar__prompt', card ? `「${card.name}」をどうしますか` : '行動を選んでください'));
+    const group = el('div', 'actionbar__group');
     for (const intent of selection.intents) {
-      const btn = el('button', 'btn btn--tiny', intent.label);
-      btn.addEventListener('click', () => chooseIntent(intent));
-      bar.append(btn);
+      hotkeyButton(group, intent.label, () => chooseIntent(intent));
     }
-    const cancel = el('button', 'btn btn--ghost btn--tiny', '選択解除');
-    cancel.addEventListener('click', () => { game.selection = null; render(); });
-    bar.append(cancel);
+    bar.append(group);
+    hotkeyButton(bar, '選択解除', () => { game.selection = null; render(); }, { ghost: true, key: 'Esc' });
   } else {
-    bar.append(el('span', 'actionbar__prompt', 'カードをクリックして行動を選びます'));
+    const charged = state.players[state.active].chargedThisTurn;
+    bar.append(el('span', 'actionbar__prompt is-wait',
+      charged ? 'カードを押して行動を選ぶ' : '手札を押して、まずマナに置く'));
   }
 
   const endTurn = legalActions(state).find((a) => a.type === 'endTurn');
   if (endTurn) {
-    const btn = el('button', 'btn btn--primary btn--tiny', 'ターン終了');
-    btn.addEventListener('click', () => submit(endTurn));
-    bar.append(btn);
+    bar.append(el('div', 'actionbar__spacer'));
+    hotkeyButton(bar, 'ターン終了', () => submit(endTurn), { primary: true, key: 'E' });
   }
 }
 
@@ -365,35 +483,40 @@ function renderDefendBar(bar) {
   const { state } = game;
   const actions = legalActions(state);
   const attacker = findInstance(state, state.pending.attackerUid);
-  const attackerName = attacker ? cardOf(attacker.inst).name : '?';
+  const attackerCard = attacker ? cardOf(attacker.inst) : null;
   const targetText = state.pending.target.kind === 'player'
     ? 'シールド'
     : `「${cardOf(findInstance(state, state.pending.target.uid).inst).name}」`;
 
   bar.append(el('span', 'actionbar__prompt',
-    `「${attackerName}」が ${targetText} を攻撃！ 応じますか？`));
+    `「${attackerCard?.name ?? '?'}」（攻${attackerCard ? attackerCard.power + (attacker.inst.powerBuff || 0) : '?'}）が ${targetText} を攻撃。どう応じますか`));
 
+  // ブロッカーは盤面でも押せるようにする（同名でも取り違えない）
+  const onBoard = new Map();
+  const group = el('div', 'actionbar__group');
   for (const action of actions) {
-    if (action.type === 'activateTrap') {
-      const card = cardOf(findInstance(state, action.uid).inst);
-      const btn = el('button', 'btn btn--tiny', `罠：${card.name}`);
-      btn.title = card.text;
-      btn.addEventListener('click', () => submit(action));
-      bar.append(btn);
-    } else if (action.type === 'block') {
+    if (action.type === 'block') {
       const inst = findInstance(state, action.uid).inst;
       const card = cardOf(inst);
-      const btn = el('button', 'btn btn--tiny',
-        `🛡 ${card.name} でブロック（ガード${card.guard + inst.powerBuff}）`);
-      btn.addEventListener('click', () => submit(action));
-      bar.append(btn);
+      onBoard.set(action.uid, action);
+      cardButton(group, card, `${card.name} でブロック`, `守 ${card.guard + (inst.powerBuff || 0)} で受ける`, () => submit(action));
     }
   }
+  for (const action of actions) {
+    if (action.type === 'activateTrap') {
+      const inst = findInstance(state, action.uid).inst;
+      const card = cardOf(inst);
+      onBoard.set(action.uid, action);
+      cardButton(group, card, `罠「${card.name}」を発動`, card.text, () => submit(action));
+    }
+  }
+  if (group.childElementCount > 0) bar.append(group);
+  game.targeting = { onBoard, offBoard: [], playerZone: null, prompt: null, passive: true };
+
   const pass = actions.find((a) => a.type === 'pass');
   if (pass) {
-    const btn = el('button', 'btn btn--primary btn--tiny', '攻撃を通す');
-    btn.addEventListener('click', () => submit(pass));
-    bar.append(btn);
+    bar.append(el('div', 'actionbar__spacer'));
+    hotkeyButton(bar, group.childElementCount > 0 ? '何もせず攻撃を通す' : '攻撃を通す', () => submit(pass), { primary: true, key: 'E' });
   }
 }
 
@@ -403,46 +526,33 @@ function renderTriggerBar(bar) {
   const found = findInstance(state, uid);
   const card = found ? cardOf(found.inst) : null;
 
-  if (card) {
-    bar.append(el('span', 'actionbar__prompt', 'シールドトリガー発動！'));
-    const preview = cardEl(card, { mini: true });
-    bar.append(preview);
-  }
+  if (targeting) return renderTargetingBar(bar);
 
-  if (targeting) {
-    bar.append(el('span', 'actionbar__prompt', targeting.prompt));
-    for (const entry of targeting.offBoard) {
-      const btn = cardEl(entry.card, { mini: true });
-      btn.classList.add('is-target');
-      btn.addEventListener('click', () => submit(entry.action));
-      bar.append(btn);
-    }
-    const cancel = el('button', 'btn btn--tiny', 'やめる');
-    cancel.addEventListener('click', () => { game.targeting = null; render(); });
-    bar.append(cancel);
-    return;
+  if (card) {
+    bar.append(el('span', 'actionbar__prompt', `シールドトリガー「${card.name}」。コストなしで使えます`));
+    const preview = el('div', 'actionbar__cards');
+    const mini = cardEl(card, { mini: true });
+    mini.tabIndex = -1;
+    preview.append(mini, el('span', 'actionbar__note', card.text || ''));
+    bar.append(preview);
   }
 
   const actions = legalActions(state);
   const uses = actions.filter((a) => a.type === 'useTrigger');
   if (uses.length > 0) {
-    const btn = el('button', 'btn btn--primary btn--tiny', '使う');
-    btn.addEventListener('click', () => {
+    hotkeyButton(bar, '使う', () => {
       if (uses.length === 1 && !uses[0].targetUid) return submit(uses[0]);
-      beginTargeting(uses, '対象を選んでください');
-    });
-    bar.append(btn);
+      beginTargeting(uses, '効果の対象を選んでください');
+    }, { primary: true });
   } else if (card) {
     // 対象がいないなど、条件を満たさず発動できない場合は理由を示す
-    bar.append(el('span', 'actionbar__note', '― 効果の対象がいないため、このトリガーは使えません'));
+    bar.append(el('span', 'actionbar__note', '効果の対象がいないため、このトリガーは使えません'));
   }
 
   const skip = actions.find((a) => a.type === 'skipTrigger');
   if (skip) {
-    const label = uses.length > 0 ? '使わない（手札に残す）' : '手札に加えて続ける';
-    const btn = el('button', `btn btn--tiny${uses.length > 0 ? '' : ' btn--primary'}`, label);
-    btn.addEventListener('click', () => submit(skip));
-    bar.append(btn);
+    const label = uses.length > 0 ? '使わず手札に加える' : '手札に加えて続ける';
+    hotkeyButton(bar, label, () => submit(skip), { primary: uses.length === 0 });
   }
 }
 
@@ -451,13 +561,13 @@ function renderTriggerBar(bar) {
  * ================================================================== */
 
 const INTENT_LABEL = {
-  charge: '💠 マナに置く',
-  'play:attack': '⚔️ 攻撃表示で召喚',
-  'play:defense': '🛡 守備表示で召喚',
-  'play:spell': '✨ 唱える',
-  'play:trap': '⁉️ 伏せる',
-  changePosition: '🔄 表示形式を変える',
-  attack: '⚔️ 攻撃する',
+  charge: 'マナに置く',
+  'play:attack': '攻撃表示で召喚',
+  'play:defense': '守備表示で召喚',
+  'play:spell': '唱える',
+  'play:trap': '伏せる',
+  changePosition: '表示形式を変える',
+  attack: '攻撃する',
 };
 
 /** 選択したカードについて、行動の種類ごとにまとめる */
@@ -512,14 +622,14 @@ function chooseIntent(intent) {
     return submit(onlyAction);
   }
   const prompt = intent.key === 'attack'
-    ? '攻撃する相手を選んでください（相手のシールド、またはタップ中／守備表示のクリーチャー）'
+    ? '攻撃先を選んでください。相手のシールドか、タップ中／守備表示のクリーチャー'
     : '効果の対象を選んでください';
   beginTargeting(intent.actions, prompt);
 }
 
 /**
  * 対象選択モードに入る。
- * 盤面に見えている対象はハイライトし、墓地など見えない対象は行動バーに並べる。
+ * 盤面に見えている対象はハイライトし、墓地など見えない対象はレールに並べる。
  */
 function beginTargeting(actions, prompt) {
   const { state } = game;
@@ -537,7 +647,10 @@ function beginTargeting(actions, prompt) {
     if (!uid) continue;
     const found = findInstance(state, uid);
     if (found && found.zone === 'field') onBoard.set(uid, action);
-    else if (found) offBoard.push({ action, card: cardOf(found.inst) });
+    else if (found) {
+      const zoneName = { grave: '墓地', hand: '手札', mana: 'マナ', shields: 'シールド', traps: '伏せ' }[found.zone] || found.zone;
+      offBoard.push({ action, card: cardOf(found.inst), note: `${state.players[found.player].name} の${zoneName}` });
+    }
   }
 
   game.targeting = { onBoard, offBoard, playerZone, prompt };
@@ -552,6 +665,8 @@ function applyTargetHighlights() {
   for (const zone of [foeShields, meShields]) {
     zone.classList.remove('is-targetzone');
     zone.onclick = null;
+    zone.removeAttribute('role');
+    zone.removeAttribute('tabindex');
   }
 
   if (!game.targeting) return;
@@ -561,6 +676,7 @@ function applyTargetHighlights() {
     const node = document.querySelector(`#screen-duel .card[data-uid="${uid}"]`);
     if (!node) continue;
     node.classList.add('is-target');
+    node.setAttribute('aria-label', `${node.getAttribute('aria-label')}、対象に選べる`);
     node.onclick = (event) => {
       event.stopPropagation();
       submit(action);
@@ -607,6 +723,7 @@ function scheduleAuto() {
     game.lastActive = state.active;
     $('handoff-name').textContent = `${state.players[state.active].name} のターン`;
     $('handoff').hidden = false;
+    $('btn-handoff').focus();
     return;
   }
   game.lastActive = state.active;
@@ -636,6 +753,7 @@ function scheduleAuto() {
 let toastTimer = null;
 function toast(text) {
   const node = el('div', 'toast', text);
+  node.setAttribute('role', 'status');
   document.body.append(node);
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => node.remove(), 1500);
@@ -651,7 +769,7 @@ function playEffects(before, after) {
     zone.querySelectorAll('.cardback').forEach((node, i) => {
       if (i < event.count) node.classList.add('fx-break');
     });
-    toast(`シールドブレイク！ ×${event.count}`);
+    toast(`シールドブレイク ×${event.count}`);
     $('screen-duel').classList.add('fx-shake');
     setTimeout(() => $('screen-duel').classList.remove('fx-shake'), 400);
   } else if (event.type === 'trigger') {
@@ -663,7 +781,7 @@ function playEffects(before, after) {
   }
 
   const destroyed = after.log.slice(before.log.length).filter((l) => l.kind === 'destroy');
-  if (destroyed.length > 0 && event.type !== 'shieldBreak') toast('クリーチャー破壊！');
+  if (destroyed.length > 0 && event.type !== 'shieldBreak') toast('クリーチャー破壊');
 }
 
 function renderLog() {
@@ -689,33 +807,34 @@ function showResult() {
     const winner = state.players[state.winner];
     const won = game.config.mode === 'cpu' ? state.winner === human : true;
     title.textContent = game.config.mode === 'cpu'
-      ? (won ? '🏆 勝利！' : '💀 敗北…')
-      : `🏆 ${winner.name} の勝利！`;
+      ? (won ? '勝利' : '敗北')
+      : `${winner.name} の勝利`;
     detail.textContent = state.winReason === 'deckout'
       ? `${state.players[opponentOf(state.winner)].name} の山札が尽きました。`
       : `${winner.name} のダイレクトアタックが決まりました（${state.turn}ターン）。`;
   }
   box.hidden = false;
+  $('btn-rematch').focus();
 }
 
 /* ================================================================== *
- * 盤面のクリック
+ * 盤面のクリックとキーボード
  * ================================================================== */
 
 document.addEventListener('click', (event) => {
   if (!game) return;
   if ($('screen-duel').classList.contains('is-active') === false) return;
 
-  // 行動バーのボタンなどは、自分の click ハンドラの中で render() を呼び、
+  // レールのボタンなどは、自分の click ハンドラの中で render() を呼び、
   // その時点で DOM から取り除かれる。ここまでバブリングしてきた時点では
   // すでに document から切り離されているため closest() が効かない。
   // 「切り離された要素からのイベント＝すでに処理済み」とみなして無視する。
   if (!event.target.isConnected) return;
 
-  const cardNode = event.target.closest('#me-hand .card, #me-field .card, #screen-duel .zone--field .card');
+  const cardNode = event.target.closest('#me-hand .card, #screen-duel .zone--field .card');
   if (!cardNode || !cardNode.dataset.uid) {
-    if (event.target.closest('#actionbar') || event.target.closest('.overlay')) return;
-    if (game.selection || game.targeting) {
+    if (event.target.closest('#rail') || event.target.closest('.overlay')) return;
+    if (game.selection || (game.targeting && !game.targeting.passive)) {
       game.selection = null;
       game.targeting = null;
       render();
@@ -730,3 +849,36 @@ document.addEventListener('click', (event) => {
   if (found.player !== game.state.active) return;
   selectCard(cardNode.dataset.uid);
 });
+
+/**
+ * キーボード操作。
+ *   Esc … 選択・対象指定をやめる
+ *   E   … ターン終了（または攻撃を通す）
+ *   1-9 … レールに並んだ選択肢
+ * カード自体は <button> なので、Tab と Enter で選べる。
+ */
+function onKeyDown(event) {
+  if (!game) return;
+  if (!$('screen-duel').classList.contains('is-active')) return;
+  if (!$('handoff').hidden || !$('result').hidden) return;
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  const tag = event.target?.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+  if (event.key === 'Escape') {
+    if (game.selection || (game.targeting && !game.targeting.passive)) {
+      game.selection = null;
+      game.targeting = null;
+      render();
+      event.preventDefault();
+    }
+    return;
+  }
+
+  const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  const btn = $('actionbar').querySelector(`[data-hotkey="${key}"]`);
+  if (btn) {
+    event.preventDefault();
+    btn.click();
+  }
+}

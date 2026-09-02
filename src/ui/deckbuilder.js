@@ -59,9 +59,12 @@ function bindEvents() {
 function renderFilters() {
   const civBar = document.getElementById('db-filter-civ');
   civBar.replaceChildren();
-  const civOptions = [['all', 'すべての文明'], ...Object.entries(CIVS).map(([k, v]) => [k, `${v.emoji}${v.name}`])];
+  const civOptions = [['all', 'すべての文明'], ...Object.entries(CIVS).map(([k, v]) => [k, v.name])];
   for (const [key, label] of civOptions) {
     const btn = el('button', filterCiv === key ? 'is-on' : null, label);
+    btn.type = 'button';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(filterCiv === key));
     btn.addEventListener('click', () => { filterCiv = key; renderFilters(); renderPool(); });
     civBar.append(btn);
   }
@@ -70,6 +73,9 @@ function renderFilters() {
   typeBar.replaceChildren();
   for (const { key, label } of TYPE_FILTERS) {
     const btn = el('button', filterType === key ? 'is-on' : null, label);
+    btn.type = 'button';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(filterType === key));
     btn.addEventListener('click', () => { filterType = key; renderFilters(); renderPool(); });
     typeBar.append(btn);
   }
@@ -116,7 +122,7 @@ function renderDeckList() {
     .sort((a, b) => a.card.cost - b.card.cost || a.card.name.localeCompare(b.card.name, 'ja'));
 
   if (entries.length === 0) {
-    list.append(el('li', null, 'カードを追加してください'));
+    list.append(el('li', 'is-empty', 'カードを追加してください'));
     return;
   }
 
@@ -124,11 +130,10 @@ function renderDeckList() {
     const li = el('li');
     li.title = 'クリックで1枚減らす';
     const cost = el('span', 'decklist__cost', String(card.cost));
-    cost.style.setProperty('--civ', CIVS[card.civ].color);
+    cost.style.setProperty('--civ', `var(--civ-${card.civ})`);
     li.append(cost);
     li.append(el('span', 'decklist__name', `${card.emoji} ${card.name}`));
     li.append(el('span', 'decklist__n', `×${n}`));
-    li.style.cursor = 'pointer';
     li.addEventListener('click', () => remove(card.id));
     list.append(li);
   }
@@ -147,18 +152,21 @@ function renderStats() {
     const { civ } = getCard(id);
     civCounts[civ] = (civCounts[civ] || 0) + n;
   }
+  const civRow = el('div', 'deckstats__row');
+  civRow.append(el('span', null, '文明'));
   const bar = el('div', 'civbar');
   for (const [civ, n] of Object.entries(civCounts)) {
     const seg = el('i');
     seg.style.width = `${(n / Math.max(total, 1)) * 100}%`;
-    seg.style.background = CIVS[civ].color;
+    seg.style.background = `var(--civ-${civ})`;
     seg.title = `${CIVS[civ].name}: ${n}枚`;
     bar.append(seg);
   }
+  civRow.append(bar);
   const civText = Object.entries(civCounts)
-    .map(([civ, n]) => `${CIVS[civ].emoji}${n}`).join('  ') || '―';
-  stats.append(el('div', null, `文明: ${civText}`));
-  if (total > 0) stats.append(bar);
+    .map(([civ, n]) => `${CIVS[civ].name}${n}`).join(' ') || '―';
+  civRow.append(el('span', null, civText));
+  stats.append(civRow);
 
   // マナカーブ
   const curve = manaCurve(recipe);
@@ -168,12 +176,12 @@ function renderStats() {
     const barEl = el('div', 'curve__bar');
     barEl.style.height = `${(n / max) * 100}%`;
     barEl.title = `コスト${cost}: ${n}枚`;
+    if (n > 0) barEl.append(el('i', null, String(n)));
     barEl.append(el('span', null, cost === '7' ? '7+' : cost));
     curveEl.append(barEl);
   }
   stats.append(el('div', null, 'マナカーブ'));
   stats.append(curveEl);
-  stats.append(el('div', null, ' '));
 
   const result = validateRecipe(recipe);
   if (!result.ok) message(result.errors[0], 'is-error');

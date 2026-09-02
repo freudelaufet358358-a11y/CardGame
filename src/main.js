@@ -1,5 +1,5 @@
 /**
- * 画面のルーティングと対戦準備。
+ * 画面のルーティングと対戦準備、見た目（スキン）の切り替え。
  */
 
 import { CIVS } from './data/cards.js';
@@ -18,6 +18,13 @@ const SCREENS = {
   deckbuilder: 'screen-deckbuilder',
   rules: 'screen-rules',
 };
+
+/** 見た目。色・書体・形のトークンを CSS 側で差し替える */
+const SKINS = [
+  { key: 'felt', label: '卓上', themeColor: '#34393a' },
+  { key: 'console', label: '計器盤', themeColor: '#1c1e1a' },
+  { key: 'manual', label: '説明書', themeColor: '#f7f6f1' },
+];
 
 const setup = {
   mode: 'cpu',
@@ -53,6 +60,48 @@ document.addEventListener('click', (event) => {
   if (target === 'setup-hotseat') return openSetup('hotseat');
   goto(target);
 });
+
+/* ------------------------------------------------------------------ *
+ * 見た目
+ * ------------------------------------------------------------------ */
+
+function applySkin(key) {
+  const skin = SKINS.find((s) => s.key === key) || SKINS[0];
+  document.documentElement.dataset.skin = skin.key;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', skin.themeColor);
+  renderSkinPicker();
+}
+
+function renderSkinPicker() {
+  const bar = document.getElementById('skin-picker');
+  if (!bar) return;
+  bar.replaceChildren();
+  const current = document.documentElement.dataset.skin;
+  for (const skin of SKINS) {
+    const btn = el('button', current === skin.key ? 'is-on' : null, skin.label);
+    btn.type = 'button';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(current === skin.key));
+    btn.addEventListener('click', () => {
+      savePrefs({ skin: skin.key });
+      applySkin(skin.key);
+    });
+    bar.append(btn);
+  }
+}
+
+/** 排他選択のボタン列を描く共通処理 */
+function renderRadioBar(node, options, current, onPick) {
+  node.replaceChildren();
+  for (const [key, label] of options) {
+    const btn = el('button', current === key ? 'is-on' : null, label);
+    btn.type = 'button';
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', String(current === key));
+    btn.addEventListener('click', () => onPick(key));
+    node.append(btn);
+  }
+}
 
 /* ------------------------------------------------------------------ *
  * 対戦準備
@@ -109,12 +158,22 @@ function renderDeckChoices() {
     if (!container) continue;
     container.replaceChildren();
     for (const deck of decks) {
-      const btn = el('button', `deckopt${setup.deck[side] === deck.key ? ' is-selected' : ''}`);
+      const selected = setup.deck[side] === deck.key;
+      const btn = el('button', `deckopt${selected ? ' is-selected' : ''}`);
+      btn.type = 'button';
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', String(selected));
       const name = el('div', 'deckopt__name');
       name.append(document.createTextNode(deck.name));
+      const civs = el('span', 'deckopt__civs');
       for (const civ of deck.civs || []) {
-        if (CIVS[civ]) name.append(el('span', null, CIVS[civ].emoji));
+        if (!CIVS[civ]) continue;
+        const chip = el('i');
+        chip.style.setProperty('--civ', `var(--civ-${civ})`);
+        chip.title = `${CIVS[civ].name}文明`;
+        civs.append(chip);
       }
+      name.append(civs);
       btn.append(name);
       btn.append(el('div', 'deckopt__desc', deck.description));
       btn.addEventListener('click', () => {
@@ -128,32 +187,24 @@ function renderDeckChoices() {
 }
 
 function renderDifficulty() {
-  const bar = document.getElementById('setup-difficulty');
-  bar.replaceChildren();
-  for (const [key, info] of Object.entries(DIFFICULTIES)) {
-    const btn = el('button', setup.difficulty === key ? 'is-on' : null, info.label);
-    btn.addEventListener('click', () => {
-      setup.difficulty = key;
-      savePrefs({ difficulty: key });
-      renderDifficulty();
-    });
-    bar.append(btn);
-  }
+  const options = Object.entries(DIFFICULTIES).map(([key, info]) => [key, info.label]);
+  renderRadioBar(document.getElementById('setup-difficulty'), options, setup.difficulty, (key) => {
+    setup.difficulty = key;
+    savePrefs({ difficulty: key });
+    renderDifficulty();
+  });
 }
 
 function renderFirst() {
-  const bar = document.getElementById('setup-first');
-  bar.replaceChildren();
   const options = [
     ['random', 'ランダム'],
     ['me', setup.mode === 'cpu' ? 'あなた' : 'プレイヤー1'],
     ['foe', setup.mode === 'cpu' ? 'CPU' : 'プレイヤー2'],
   ];
-  for (const [key, label] of options) {
-    const btn = el('button', setup.first === key ? 'is-on' : null, label);
-    btn.addEventListener('click', () => { setup.first = key; renderFirst(); });
-    bar.append(btn);
-  }
+  renderRadioBar(document.getElementById('setup-first'), options, setup.first, (key) => {
+    setup.first = key;
+    renderFirst();
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -195,4 +246,5 @@ document.getElementById('btn-start-duel').addEventListener('click', () => {
  * 起動
  * ------------------------------------------------------------------ */
 
+applySkin(loadPrefs().skin);
 goto('title');
