@@ -7,6 +7,7 @@
  */
 
 import { CIVS, KEYWORDS } from '../data/cards.js';
+import { cardArt } from '../data/art.js';
 
 export function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -59,7 +60,9 @@ export function cardEl(card, opts = {}) {
 
   node.append(el('span', 'card__cost', String(card.cost)));
   node.append(el('span', 'card__civ', CIV_KANJI[card.civ]));
-  node.append(el('span', 'card__art', card.emoji));
+  const art = el('span', 'card__art');
+  art.append(cardArt(card));
+  node.append(art);
   node.append(el('span', 'card__name', card.name));
 
   if (card.type === 'creature') {
@@ -119,7 +122,7 @@ export function cardDetailHTML(card) {
     .map((k) => `<b>${KEYWORDS[k].name}</b>：${escapeHTML(KEYWORDS[k].text)}`)
     .join('<br>');
   return `
-    <h4>${card.emoji} ${escapeHTML(card.name)}</h4>
+    <h4><span class="cardpeek__art" style="--civ:var(--civ-${card.civ})">${cardArt(card).outerHTML}</span>${escapeHTML(card.name)}</h4>
     <div class="cardpeek__meta">${CIV_KANJI[card.civ]}・${civ.name}文明 ／ コスト <b>${card.cost}</b> ／ ${TYPE_NAME[card.type]}${stats}</div>
     <div class="cardpeek__text">${escapeHTML(card.text || '')}${kw ? `<div class="cardpeek__kw">${kw}</div>` : ''}</div>
   `;

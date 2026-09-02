@@ -6,6 +6,7 @@
  * 保存は localStorage（storage.js）。
  */
 
+import { cardArt } from '../data/art.js';
 import { ALL_CARDS, CIVS, getCard } from '../data/cards.js';
 import {
   DECK_SIZE, MAX_COPIES, PRESET_DECKS, manaCurve, recipeCount, validateRecipe,
@@ -132,7 +133,9 @@ function renderDeckList() {
     const cost = el('span', 'decklist__cost', String(card.cost));
     cost.style.setProperty('--civ', `var(--civ-${card.civ})`);
     li.append(cost);
-    li.append(el('span', 'decklist__name', `${card.emoji} ${card.name}`));
+    const name = el('span', 'decklist__name');
+    name.append(cardArt(card, { backdrop: false }), document.createTextNode(card.name));
+    li.append(name);
     li.append(el('span', 'decklist__n', `×${n}`));
     li.addEventListener('click', () => remove(card.id));
     list.append(li);

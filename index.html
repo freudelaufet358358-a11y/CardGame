@@ -33,6 +33,10 @@
       </p>
 
       <nav class="menu" aria-label="メインメニュー">
+        <button class="menu__item menu__item--resume" data-goto="duel" id="menu-resume" hidden>
+          <span class="menu__label">対戦を再開</span>
+          <span class="menu__desc" id="menu-resume-desc"></span>
+        </button>
         <button class="menu__item" data-goto="setup-cpu">
           <span class="menu__label">CPUと対戦</span>
           <span class="menu__desc">ひとりで遊ぶ。やさしい／ふつう</span>
@@ -222,6 +226,9 @@
   </header>
   <div class="doc" id="rules-body"></div>
 </section>
+
+<!-- スクリーンリーダー向け: 盤面で起きたことを読み上げる -->
+<div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <script type="module" src="src/main.js"></script>
 </body>

@@ -17,6 +17,7 @@ import { cardOf, createGame, findInstance, isSummoningSick, opponentOf } from '.
 import { applyAction, legalActions } from '../engine/rules.js';
 import { chooseAction } from '../ai/cpu.js';
 import { attachPeek, backEl, cardEl, el, hidePeek } from './cardview.js';
+import { clearGame, loadPrefs, saveGame, savePrefs } from './storage.js';
 
 const CPU_DELAY = 620;
 const CPU_DELAY_FAST = 260;
@@ -44,11 +45,13 @@ function $(id) {
  * @param {'easy'|'normal'} config.difficulty
  * @param {number|undefined} config.firstPlayer
  * @param {Function} config.onExit タイトルへ戻るときに呼ぶ
+ * @param {{state:object, lastActive:number}} [config.resume] 保存された対戦を再開するとき
  */
 export function startDuel(config) {
+  const { resume, ...rest } = config;
   game = {
-    config,
-    state: createGame({
+    config: rest,
+    state: resume ? resume.state : createGame({
       players: config.players,
       firstPlayer: config.firstPlayer,
     }),
@@ -57,13 +60,16 @@ export function startDuel(config) {
     busy: false,
     lastActive: null,
     timer: null,
+    announced: 0,
+    coachDone: !!loadPrefs().coachDone,
   };
   $('result').hidden = true;
   $('handoff').hidden = true;
   setLogOpen(false);
   bindOnce();
-  // 先攻がCPUなら、そのまま思考を始める
-  game.lastActive = game.state.active;
+  // 再開時は、2人対戦なら必ず受け渡し画面を挟む（前の人の手札を見せない）
+  game.lastActive = resume && rest.mode === 'hotseat' ? -1 : game.state.active;
+  game.announced = game.state.log.length;
   render();
   scheduleAuto();
 }
@@ -71,6 +77,39 @@ export function startDuel(config) {
 export function stopDuel() {
   if (game?.timer) clearTimeout(game.timer);
   game = null;
+}
+
+/** 対戦画面が動いているか（ルーティングが使う） */
+export function isDuelActive() {
+  return !!game;
+}
+
+/** 進行中の対戦を保存する。決着していれば消す */
+function persist() {
+  if (!game) return;
+  if (game.state.phase === 'gameover') {
+    clearGame();
+    return;
+  }
+  const { mode, difficulty, firstPlayer, players } = game.config;
+  saveGame({
+    config: { mode, difficulty, firstPlayer, players },
+    state: game.state,
+    lastActive: game.lastActive,
+    savedAt: Date.now(),
+  });
+}
+
+/** スクリーンリーダー向けに、盤面で起きたことを読み上げる */
+function announce() {
+  const live = $('sr-live');
+  if (!live || !game) return;
+  const fresh = game.state.log.slice(game.announced);
+  game.announced = game.state.log.length;
+  if (fresh.length === 0) return;
+  // 同じ文言でも読み上げ直せるよう、いったん空にする
+  live.textContent = '';
+  live.textContent = fresh.map((entry) => entry.text).join(' ');
 }
 
 let bound = false;
@@ -86,6 +125,7 @@ function bindOnce() {
   $('btn-quit').addEventListener('click', () => {
     if (!game) return;
     if (!window.confirm('投了してタイトルに戻りますか？')) return;
+    clearGame();
     leaveDuel();
   });
 
@@ -175,6 +215,8 @@ function render() {
   renderActionBar();
   applyTargetHighlights();
   renderLog();
+  announce();
+  persist();
 
   if (focused) {
     const again = document.querySelector(`#screen-duel [data-uid="${focused}"]`);
@@ -216,7 +258,9 @@ function renderField(node, index) {
   const player = state.players[index];
   node.replaceChildren();
   if (player.field.length === 0) {
-    node.append(el('span', 'zone__empty', 'バトルゾーンは空'));
+    const own = index === viewpoint();
+    node.append(el('span', 'zone__empty',
+      own && !game.coachDone ? 'バトルゾーンは空。召喚したクリーチャーがここに並ぶ' : 'バトルゾーンは空'));
     return;
   }
   for (const inst of player.field) {
@@ -419,7 +463,33 @@ function renderActionBar() {
 
   if (state.phase === 'defend') return renderDefendBar(bar);
   if (state.phase === 'trigger') return renderTriggerBar(bar);
+  if (!game.coachDone) renderCoach(bar);
   return renderMainBar(bar);
+}
+
+/** 初回だけ出す、最初の数手の案内。閉じるか1戦終えると二度と出ない */
+function renderCoach(bar) {
+  const box = el('div', 'coach');
+  box.setAttribute('role', 'note');
+  const head = el('div', 'coach__head');
+  head.append(el('b', null, 'はじめての人へ'));
+  const close = el('button', 'btn btn--ghost btn--tiny', '閉じる');
+  close.type = 'button';
+  close.addEventListener('click', () => {
+    game.coachDone = true;
+    savePrefs({ coachDone: true });
+    render();
+  });
+  head.append(close);
+  box.append(head);
+  const steps = el('ol', 'coach__steps');
+  for (const text of [
+    '手札を押して「マナに置く」。毎ターン1枚ずつマナが増える',
+    'マナがコストぶん貯まったら、手札のクリーチャーを召喚する',
+    '次のターンから攻撃できる。まずは相手のシールドを狙う',
+  ]) steps.append(el('li', null, text));
+  box.append(steps);
+  bar.append(box);
 }
 
 /** 対象選択中の共通部分：案内文、盤面外の対象、盤面上の対象のボタン列、やめる */
@@ -795,6 +865,10 @@ function renderLog() {
 
 function showResult() {
   const { state } = game;
+  if (!game.coachDone) {
+    game.coachDone = true;
+    savePrefs({ coachDone: true });
+  }
   const human = state.players.findIndex((p) => p.controller === 'human');
   const box = $('result');
   const title = $('result-title');

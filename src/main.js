@@ -1,14 +1,19 @@
 /**
- * 画面のルーティングと対戦準備、見た目（スキン）の切り替え。
+ * 画面のルーティング（URL ハッシュ）、対戦準備、見た目（スキン）の切り替え。
+ *
+ * 画面は location.hash で表す（#setup-cpu, #duel, #deckbuilder, #rules）。
+ * ブラウザの戻る／進むはハッシュの変化として届くので、それを画面切り替えに使う。
+ * 対戦中の状態は duel.js が localStorage に保存しており、
+ * リロードや戻るで離れても #duel に来れば続きから再開できる。
  */
 
 import { CIVS } from './data/cards.js';
 import { PRESET_DECKS, expandDeck, recipeCivs, validateRecipe } from './data/decks.js';
 import { DIFFICULTIES } from './ai/cpu.js';
-import { startDuel, stopDuel } from './ui/duel.js';
+import { isDuelActive, startDuel, stopDuel } from './ui/duel.js';
 import { openDeckBuilder } from './ui/deckbuilder.js';
 import { renderRules } from './ui/rulesdoc.js';
-import { loadDecks, loadPrefs, savePrefs } from './ui/storage.js';
+import { loadDecks, loadGame, loadPrefs, savePrefs } from './ui/storage.js';
 import { el, hidePeek } from './ui/cardview.js';
 
 const SCREENS = {
@@ -37,28 +42,66 @@ const setup = {
  * ルーティング
  * ------------------------------------------------------------------ */
 
-function goto(name) {
+function currentRoute() {
+  return decodeURIComponent(location.hash.replace(/^#/, '')) || 'title';
+}
+
+/** 画面を切り替えたいときはこれを呼ぶ。ハッシュを変え、hashchange 経由で route() が走る */
+function navigate(name) {
+  if (currentRoute() === name) {
+    route(name);
+    return;
+  }
+  location.hash = name === 'title' ? '' : name;
+}
+
+/** 指定の画面だけを表示する */
+function showScreen(name) {
   hidePeek();
   if (name !== 'duel') stopDuel();
-
   for (const [key, id] of Object.entries(SCREENS)) {
     document.getElementById(id).classList.toggle('is-active', key === name);
   }
   window.scrollTo(0, 0);
-
-  if (name === 'deckbuilder') openDeckBuilder({ onDecksChanged: () => renderDeckChoices() });
-  if (name === 'rules') renderRules(document.getElementById('rules-body'));
 }
 
-document.addEventListener('sbd:goto', (event) => goto(event.detail));
+/** ハッシュに対応する画面を出す */
+function route(name) {
+  if (name === 'setup-cpu') return openSetup('cpu');
+  if (name === 'setup-hotseat') return openSetup('hotseat');
+
+  if (name === 'duel') {
+    if (isDuelActive()) return showScreen('duel');
+    const saved = loadGame();
+    if (saved) return resumeDuel(saved);
+    return navigate('title');
+  }
+
+  if (name === 'deckbuilder') {
+    showScreen('deckbuilder');
+    openDeckBuilder({ onDecksChanged: () => renderDeckChoices() });
+    return;
+  }
+  if (name === 'rules') {
+    showScreen('rules');
+    renderRules(document.getElementById('rules-body'));
+    return;
+  }
+
+  // 不明なハッシュはタイトル扱い
+  showScreen('title');
+  renderResumeItem();
+  renderSkinPicker();
+}
+
+window.addEventListener('hashchange', () => route(currentRoute()));
+
+document.addEventListener('sbd:goto', (event) => navigate(event.detail));
 
 document.addEventListener('click', (event) => {
   const trigger = event.target.closest('[data-goto]');
   if (!trigger) return;
-  const target = trigger.dataset.goto;
-  if (target === 'setup-cpu') return openSetup('cpu');
-  if (target === 'setup-hotseat') return openSetup('hotseat');
-  goto(target);
+  navigate(trigger.dataset.goto);
 });
 
 /* ------------------------------------------------------------------ *
@@ -75,19 +118,11 @@ function applySkin(key) {
 function renderSkinPicker() {
   const bar = document.getElementById('skin-picker');
   if (!bar) return;
-  bar.replaceChildren();
   const current = document.documentElement.dataset.skin;
-  for (const skin of SKINS) {
-    const btn = el('button', current === skin.key ? 'is-on' : null, skin.label);
-    btn.type = 'button';
-    btn.setAttribute('role', 'radio');
-    btn.setAttribute('aria-checked', String(current === skin.key));
-    btn.addEventListener('click', () => {
-      savePrefs({ skin: skin.key });
-      applySkin(skin.key);
-    });
-    bar.append(btn);
-  }
+  renderRadioBar(bar, SKINS.map((s) => [s.key, s.label]), current, (key) => {
+    savePrefs({ skin: key });
+    applySkin(key);
+  });
 }
 
 /** 排他選択のボタン列を描く共通処理 */
@@ -101,6 +136,31 @@ function renderRadioBar(node, options, current, onPick) {
     btn.addEventListener('click', () => onPick(key));
     node.append(btn);
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * 中断した対戦の再開
+ * ------------------------------------------------------------------ */
+
+/** タイトルの「対戦を再開」を、保存があるときだけ出す */
+function renderResumeItem() {
+  const item = document.getElementById('menu-resume');
+  const saved = loadGame();
+  item.hidden = !saved;
+  if (!saved) return;
+  const { state, config } = saved;
+  const names = state.players.map((p) => p.name).join(' vs ');
+  const mode = config.mode === 'cpu' ? 'CPU対戦' : '2人対戦';
+  document.getElementById('menu-resume-desc').textContent = `${mode} ／ ターン${state.turn} ／ ${names}`;
+}
+
+function resumeDuel(saved) {
+  showScreen('duel');
+  startDuel({
+    ...saved.config,
+    onExit: () => navigate('title'),
+    resume: { state: saved.state, lastActive: saved.lastActive },
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -148,7 +208,7 @@ function openSetup(mode) {
   renderDeckChoices();
   renderDifficulty();
   renderFirst();
-  goto('setup');
+  showScreen('setup');
 }
 
 function renderDeckChoices() {
@@ -221,11 +281,13 @@ document.getElementById('btn-start-duel').addEventListener('click', () => {
     ? undefined
     : (setup.first === 'me' ? 0 : 1);
 
+  // 新しく始めるので、以前の中断データは上書きされる
+  showScreen('duel');
   startDuel({
     mode: setup.mode,
     difficulty: setup.difficulty,
     firstPlayer,
-    onExit: () => goto('title'),
+    onExit: () => navigate('title'),
     players: [
       {
         name: setup.mode === 'cpu' ? 'あなた' : 'プレイヤー1',
@@ -239,7 +301,7 @@ document.getElementById('btn-start-duel').addEventListener('click', () => {
       },
     ],
   });
-  goto('duel');
+  navigate('duel');
 });
 
 /* ------------------------------------------------------------------ *
@@ -247,4 +309,4 @@ document.getElementById('btn-start-duel').addEventListener('click', () => {
  * ------------------------------------------------------------------ */
 
 applySkin(loadPrefs().skin);
-goto('title');
+route(currentRoute());

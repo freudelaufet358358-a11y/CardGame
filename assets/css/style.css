@@ -352,12 +352,13 @@ button { font: inherit; color: inherit; }
 }
 .card__art {
   display: block;
-  font-size: 30px;
-  line-height: 1.2;
   margin-top: 18px;
-  font-family: var(--ff-ui);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25));
+  line-height: 0;
 }
+.art { display: block; width: 40px; height: 40px; margin: 0 auto; overflow: visible; }
+.art__back { color: var(--civ); opacity: .3; }
+.art__glyph { color: var(--ink); }
+.card__art .art { width: 40px; height: 40px; }
 .card__name {
   flex: 1;
   font-size: 10.5px;
@@ -501,7 +502,8 @@ button { font: inherit; color: inherit; }
 }
 .card--mini .card__cost { min-width: 16px; height: 16px; font-size: 11px; line-height: 16px; left: 3px; top: 3px; }
 .card--mini .card__civ { font-size: 10px; line-height: 16px; right: 4px; top: 3px; }
-.card--mini .card__art { font-size: 18px; margin-top: 12px; }
+.card--mini .card__art { margin-top: 12px; }
+.card--mini .card__art .art { width: 24px; height: 24px; }
 .card--mini .card__name { font-size: 8px; }
 .card--mini .card__stats, .card--mini .card__kind { display: none; }
 .card--mini .card__kw { display: none; }
@@ -587,7 +589,8 @@ button { font: inherit; color: inherit; }
 .ledger .zone__empty { color: var(--dim); font-size: 11px; }
 .ledger .zone--traps .card--mini { --card-w: 22px; --card-h: 30px; padding: 0; border-top-width: 3px; }
 .ledger .zone--traps .card--mini > span { display: none; }
-.ledger .zone--traps .card--mini .card__art { display: block; font-size: 12px; margin-top: 4px; }
+.ledger .zone--traps .card--mini .card__art { display: block; margin-top: 4px; }
+.ledger .zone--traps .card--mini .card__art .art { width: 14px; height: 14px; }
 .ledger .zone--traps .card--mini::after { display: none; }
 
 /* 相手の帳票では、こちらを狙う手がかりとして盾を大きめに */
@@ -715,11 +718,39 @@ button { font: inherit; color: inherit; }
 .btn--withcard .card--mini { --card-w: 40px; --card-h: 54px; padding: 3px 2px 2px; border-top-width: 3px; pointer-events: none; }
 .btn--withcard .card--mini .card__cost { display: none; }
 .btn--withcard .card--mini .card__civ { display: none; }
-.btn--withcard .card--mini .card__art { font-size: 15px; margin-top: 2px; }
+.btn--withcard .card--mini .card__art { margin-top: 3px; }
+.btn--withcard .card--mini .card__art .art { width: 18px; height: 18px; }
 .btn--withcard .card--mini .card__name { font-size: 6.5px; }
 .btn--withcard .card--mini .card__kw { display: none; }
 .btn--withcard .btn__text { flex: 1; line-height: 1.35; }
 .btn--withcard .btn__text small { display: block; font-size: 11px; opacity: .7; }
+
+/* 初回ガイド */
+.coach {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  background: rgba(127, 127, 127, .08);
+}
+.coach { width: 100%; }
+.coach__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.coach__head b { flex: 1; white-space: nowrap; }
+.coach__steps { margin: 0; padding-left: 1.4em; color: var(--muted); line-height: 1.5; }
+.coach__steps li { margin: 2px 0; }
+
+/* 読み上げ専用（画面には出さない） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .rail__log { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .rail__logtitle {
@@ -764,7 +795,8 @@ button { font: inherit; color: inherit; }
   line-height: 1.6;
   pointer-events: none;
 }
-.cardpeek h4 { margin: 0 0 2px; font-size: 14px; font-family: var(--ff-card); }
+.cardpeek h4 { margin: 0 0 2px; font-size: 14px; font-family: var(--ff-card); display: flex; align-items: center; gap: 6px; }
+.cardpeek__art .art { width: 24px; height: 24px; margin: 0; }
 .cardpeek__meta { color: var(--ink-muted); font-size: 11.5px; margin-bottom: 6px; }
 .cardpeek__meta b { color: var(--ink); font-family: var(--ff-num); }
 .cardpeek__text { border-top: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); padding-top: 6px; }
@@ -867,6 +899,8 @@ button { font: inherit; color: inherit; }
 }
 .menu__item:hover::after { opacity: 1; }
 .menu__label { font-family: var(--ff-card); font-size: 18px; font-weight: 700; }
+.menu__item--resume { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.menu__item--resume .menu__label::before { content: "▶"; font-size: 12px; margin-right: 8px; vertical-align: 2px; }
 .menu__desc { font-size: 12.5px; color: var(--ink-muted); padding-right: 24px; }
 
 .title__skin {
@@ -1017,7 +1051,9 @@ button { font: inherit; color: inherit; }
 .decklist li:hover { background: rgba(127, 127, 127, .12); }
 .decklist li.is-empty { color: var(--dim); cursor: default; }
 .decklist__n { font-family: var(--ff-num); font-weight: 700; min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
-.decklist__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.decklist__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.decklist__name .art { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+.decklist__name .art__glyph { color: var(--text); }
 .decklist__cost {
   width: 20px;
   height: 20px;
@@ -1059,6 +1095,7 @@ button { font: inherit; color: inherit; }
 .doc .kwlist { display: grid; gap: 6px; }
 .doc .kwlist div { border-left: 3px solid var(--line-strong); padding: 4px 12px; }
 .doc .kwlist b { display: inline-block; min-width: 9em; }
+.civmark { display: inline-block; width: 10px; height: 14px; border-radius: 2px; background: var(--civ); margin-right: 8px; vertical-align: -2px; }
 .doc .cardgrid .card { cursor: default; }
 .doc .cardgrid .card:hover { transform: none; }
 
@@ -1150,8 +1187,9 @@ button { font: inherit; color: inherit; }
   .ledger__name { min-width: 0; width: 100%; }
   .zone--field { min-height: calc(var(--card-h) + 22px); padding: 8px; gap: 8px; }
   .hand { padding: 10px 8px; gap: 8px; }
-  .card__art { font-size: 24px; margin-top: 16px; }
-  .card__name { font-size: 9.5px; }
+  .card__art { margin-top: 16px; }
+  .card__art .art { width: 32px; height: 32px; }
+  .card__name { font-size: 9px; letter-spacing: -.02em; }
   .card__stats { font-size: 10.5px; }
   .card__kw span { font-size: 8px; }
   .center { font-size: 12px; gap: 8px; }

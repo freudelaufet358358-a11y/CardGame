@@ -97,11 +97,11 @@ export function renderRules(container) {
     <h3>文明</h3>
     <table>
       <tr><th>文明</th><th>得意なこと</th></tr>
-      <tr><td>${CIVS.light.emoji} 光</td><td>ブロッカー、相手のタップ、タップ中の相手の除去</td></tr>
-      <tr><td>${CIVS.water.emoji} 水</td><td>ドロー、相手クリーチャーを手札に戻す</td></tr>
-      <tr><td>${CIVS.dark.emoji} 闇</td><td>破壊、墓地の再利用、手札破壊</td></tr>
-      <tr><td>${CIVS.fire.emoji} 火</td><td>スピードアタッカー、高いパワー、シールドブレイク</td></tr>
-      <tr><td>${CIVS.nature.emoji} 自然</td><td>マナ加速、最高クラスのパワー、マナ送りの除去</td></tr>
+      <tr><td><i class="civmark" style="--civ:var(--civ-light)"></i>光</td><td>ブロッカー、相手のタップ、タップ中の相手の除去</td></tr>
+      <tr><td><i class="civmark" style="--civ:var(--civ-water)"></i>水</td><td>ドロー、相手クリーチャーを手札に戻す</td></tr>
+      <tr><td><i class="civmark" style="--civ:var(--civ-dark)"></i>闇</td><td>破壊、墓地の再利用、手札破壊</td></tr>
+      <tr><td><i class="civmark" style="--civ:var(--civ-fire)"></i>火</td><td>スピードアタッカー、高いパワー、シールドブレイク</td></tr>
+      <tr><td><i class="civmark" style="--civ:var(--civ-nature)"></i>自然</td><td>マナ加速、最高クラスのパワー、マナ送りの除去</td></tr>
     </table>
 
     <h3>操作方法</h3>
@@ -118,7 +118,11 @@ export function renderRules(container) {
 
   for (const [civ, info] of Object.entries(CIVS)) {
     const cards = ALL_CARDS.filter((c) => c.civ === civ);
-    container.append(el('h4', null, `${info.emoji} ${info.name}文明`));
+    const heading = el('h4');
+    const mark = el('i', 'civmark');
+    mark.style.setProperty('--civ', `var(--civ-${civ})`);
+    heading.append(mark, document.createTextNode(`${info.name}文明`));
+    container.append(heading);
     const grid = el('div', 'cardgrid');
     for (const card of cards) grid.append(cardEl(card));
     container.append(grid);

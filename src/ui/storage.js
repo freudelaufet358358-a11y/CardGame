@@ -8,6 +8,7 @@
 
 const DECKS_KEY = 'sbd.decks.v1';
 const PREFS_KEY = 'sbd.prefs.v1';
+const GAME_KEY = 'sbd.game.v1';
 
 function readJSON(key, fallback) {
   try {
@@ -56,4 +57,29 @@ export function loadPrefs() {
 
 export function savePrefs(patch) {
   writeJSON(PREFS_KEY, { ...loadPrefs(), ...patch });
+}
+
+/* ------------------------------------------------------------------ *
+ * 進行中の対戦（リロードやブラウザの戻るで失われないように）
+ * ------------------------------------------------------------------ */
+
+/** @param {{config:object, state:object, lastActive:number, savedAt:number}} data */
+export function saveGame(data) {
+  return writeJSON(GAME_KEY, data);
+}
+
+/** 保存された進行中の対戦。決着済みや壊れたものは null */
+export function loadGame() {
+  const data = readJSON(GAME_KEY, null);
+  if (!data || !data.state || !data.config || !Array.isArray(data.state.players)) return null;
+  if (data.state.phase === 'gameover') return null;
+  return data;
+}
+
+export function clearGame() {
+  try {
+    localStorage.removeItem(GAME_KEY);
+  } catch {
+    /* 保存できない環境では何もしない */
+  }
 }

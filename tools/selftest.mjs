@@ -13,6 +13,7 @@ import { ALL_CARDS } from '../src/data/cards.js';
 import { createGame, MAX_TURNS } from '../src/engine/state.js';
 import { applyAction, describeAction, legalActions } from '../src/engine/rules.js';
 import { chooseAction } from '../src/ai/cpu.js';
+import { missingArt } from '../src/data/art.js';
 
 const games = Number(process.argv[2] || 300);
 const baseSeed = Number(process.argv[3] || 12345);
@@ -32,6 +33,10 @@ function check(condition, message, context) {
 console.log('■ カードプールとプリセットデッキの検証');
 console.log(`  カード種類数: ${ALL_CARDS.length}`);
 check(ALL_CARDS.length === 40, `カードは40種のはず（実際 ${ALL_CARDS.length}）`);
+{
+  const missing = missingArt(ALL_CARDS.map((c) => c.id));
+  check(missing.length === 0, `絵柄が未定義のカードがある: ${missing.join(', ')}`);
+}
 
 for (const card of ALL_CARDS) {
   check(card.cost >= 1, `${card.name}: コストが不正`);
